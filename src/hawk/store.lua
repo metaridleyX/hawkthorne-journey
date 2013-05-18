@@ -7,7 +7,7 @@ function Datastore:initialize(namespace)
   self.path = namespace .. ".json"
 
   if not love.filesystem.exists(self.path) then 
-    love.filesystem.write(self.path, json.encode({}))
+    print(love.filesystem.write(self.path, json.encode({})))
   end
 
   self:refresh()

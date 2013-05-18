@@ -64,14 +64,16 @@ end
 
 function state:updateFullscreen()
     if self.option_map['FULLSCREEN'].bool then
-        love.graphics.setMode(0, 0, true)
+        love.window.setMode(0, 0, true)
         local width = love.graphics:getWidth()
         local height = love.graphics:getHeight()
         camera:setScale( window.width / width , window.height / height )
-        love.graphics.setMode(width, height, true)
+        love.window.setMode(width, height, true)
     else
         camera:setScale(window.scale,window.scale)
-        love.graphics.setMode(window.screen_width, window.screen_height, false)
+        love.window.setMode(window.screen_width, window.screen_height, {
+          fullscren = false,
+        })
     end
 end
 

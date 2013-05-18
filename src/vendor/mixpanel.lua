@@ -4,6 +4,7 @@ local app = require 'app'
 
 local mixpanel = {}
 local thread = nil
+local channel = nil
 local token = nil
 
 local function mixpanelUrl(event, data)
@@ -20,17 +21,19 @@ end
 
 
 function mixpanel.init(t)
-  thread = love.thread.newThread("mixpanel", "vendor/mixpanel_thread.lua")
+  thread = love.thread.newThread("vendor/mixpanel_thread.lua")
   thread:start()
+  channel = love.thread.newChannel("metrics")
   token = t
 end
 
 function mixpanel.track(event, data)
   assert(thread, "Can't find the mixpanel thread")
+  assert(channel, "Need a channel to send data to")
   assert(token, "Need a token to send to mixpanel")
 
-  thread:set("url", mixpanelUrl(event, data))
-  thread:set("url", stathatUrl(event, data))
+  channel:push("url", mixpanelUrl(event, data))
+  channel:push("url", stathatUrl(event, data))
 end
 
 

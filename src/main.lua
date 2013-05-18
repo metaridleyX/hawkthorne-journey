@@ -1,14 +1,16 @@
+love.filesystem.setIdentity('hawkthorne')
+
 require 'utils'
 
 local app = require 'app'
 
-function love.errhand(msg)
-  app:errhand(msg)
-end
-
-function love.releaseerrhand(msg)
-  app:releaseerrhand(msg)
-end
+--function love.errhand(msg)
+--  app:errhand(msg)
+--end
+--
+--function love.releaseerrhand(msg)
+--  app:releaseerrhand(msg)
+--end
 
 
 local tween = require 'vendor/tween'
@@ -37,7 +39,7 @@ end
 
 function love.load(arg)
   -- Check if this is the correct version of LOVE
-  if not (type(love._version) == "string" and love._version == "0.8.0") then
+  if not (type(love._version) == "string" and love._version >= "0.8.0") then
     error("Love 0.8.0 is required")
   end
 
@@ -142,9 +144,9 @@ function love.load(arg)
     end
   end
 
-  love.graphics.setDefaultImageFilter('nearest', 'nearest')
+  love.graphics.setDefaultFilter('nearest', 'nearest')
   camera:setScale(window.scale, window.scale)
-  love.graphics.setMode(window.screen_width, window.screen_height)
+  love.window.setMode(window.screen_width, window.screen_height)
 
   Gamestate.switch(state,door,position)
 
