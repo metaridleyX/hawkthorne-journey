@@ -4,7 +4,7 @@ return {
     position_offset = { x = 0, y = 3 },
     height = 48,
     width = 48,
-    damage = 1,
+    damage = 2,
     hp = 1,
     antigravity = true,
     animations = {
@@ -13,6 +13,10 @@ return {
             left = {'once', {'5-8,1'}, 0.2}
         },
         default = {
+            right = {'loop', {'1,2'}, 1},
+            left = {'loop', {'1,1'}, 1}
+        },
+        hurt = {
             right = {'loop', {'1,2'}, 1},
             left = {'loop', {'1,1'}, 1}
         },

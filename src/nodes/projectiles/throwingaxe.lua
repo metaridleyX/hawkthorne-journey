@@ -2,18 +2,18 @@ local game = require 'game'
 return{
     name = 'throwingaxe',
     type = 'projectile',
-    bounceFactor = -1,
     friction = 0.01 * game.step,
     width = 16,
     height = 16,
     frameWidth = 24,
     frameHeight = 24,
+    solid = true,
     playerCanPickUp = false,
-    velocity = { x = 0, y = -500 }, --initial velocity
+    velocity = { x = 0, y = 0 }, --initial velocity
     throwVelocityX = 400, 
     throwVelocityY = -550,
     stayOnScreen = false,
-    thrown = true,
+    thrown = false,
     damage = 2,
     horizontalLimit = 300,
     animations = {

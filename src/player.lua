@@ -1,3 +1,4 @@
+local json  = require 'hawk/json'
 local queue = require 'queue'
 local Timer = require 'vendor/timer'
 local window = require 'window'
@@ -9,6 +10,7 @@ local character = require 'character'
 local PlayerAttack = require 'playerAttack'
 local Statemachine = require 'hawk/statemachine'
 local Gamestate = require 'vendor/gamestate'
+local app = require 'app'
 
 local healthbar = love.graphics.newImage('images/healthbar.png')
 healthbar:setFilter('nearest', 'nearest')
@@ -72,6 +74,7 @@ function Player.new(collider)
     plyr.health = plyr.max_health
     
     plyr.jumpDamage = 4
+    plyr.punchDamage = 1
 
     plyr.inventory = Inventory.new( plyr )
     
@@ -80,6 +83,8 @@ function Player.new(collider)
     plyr.canSlideAttack = false
     
     plyr.on_ice = false
+
+    plyr.visitedLevels = {}
 
     plyr:refreshPlayer(collider)
     return plyr
@@ -102,6 +107,10 @@ function Player:refreshPlayer(collider)
         self.money = 0
         self:refillHealth()
         self.inventory = Inventory.new( self )
+        local gamesave = app.gamesaves:active()
+        if gamesave then
+            self:loadSaveData( gamesave )
+        end
     end
 
 
@@ -128,7 +137,7 @@ function Player:refreshPlayer(collider)
     self.stopped = false
 
     if self.currently_held and self.currently_held.isWeapon then
-        self.collider:remove(self.currently_held.bb)
+        if not self.currently_held.isRangedWeapon then self.collider:remove(self.currently_held.bb) end
         self.currently_held.containerLevel:removeNode(self.currently_held)
         self.currently_held.containerLevel = Gamestate.currentState()
         self.currently_held.containerLevel:addNode(self.currently_held)
@@ -162,6 +171,8 @@ function Player:refreshPlayer(collider)
 
     self.wielding = false
     self.prevAttackPressed = false
+    
+    self.currentLevel = Gamestate.currentState()
 end
 
 ---
@@ -173,6 +184,10 @@ function Player.factory(collider)
         player = Player.new(collider)
     end
     return player
+end
+
+function Player.kill()
+    player = nil
 end
 
 ---
@@ -214,11 +229,16 @@ end
 -- set to default attack
 -- @return nil
 function Player:selectWeapon(weapon)
-    if self.currently_held then
+    local selectNew = true
+    if self.currently_held and self.currently_held.deselect then
+        if weapon and weapon.name == self.currently_held.name then
+            -- if we're selecting the same weapon, un-wield it, but don't re-select it
+            selectNew = false
+        end
         self.currently_held:deselect()
     end
 
-    if weapon then
+    if weapon and selectNew then
         weapon:select(self)
     end
 end
@@ -342,7 +362,7 @@ function Player:update( dt )
         self.stopped = false
     end
     
-    if self.character.state == 'crouch' or self.character.state == 'slide' then
+    if self.character.state == 'crouch' or self.character.state == 'slide' or self.character.state == 'dig' then
         self.collider:setGhost(self.top_bb)
     else
         self.collider:setSolid(self.top_bb)
@@ -465,7 +485,7 @@ function Player:update( dt )
         self.character.direction = 'right'
     end
 
-    if self.wielding or self.hurt then
+    if self.wielding or self.attacked then
 
         self.character:animation():update(dt)
 
@@ -517,7 +537,7 @@ end
 -- sound clip, and handles invulnearbility properly.
 -- @param damage The amount of damage to deal to the player
 --
-function Player:die(damage)
+function Player:hurt(damage)
     if self.invulnerable or cheat:is('god') then
         return
     end
@@ -543,12 +563,12 @@ function Player:die(damage)
         self.dead = true
         self.character.state = 'dead'
     else
-        self.hurt = true
+        self.attacked = true
         self.character.state = 'hurt'
     end
     
     Timer.add(0.4, function()
-        self.hurt = false
+        self.attacked = false
     end)
 
     Timer.add(1.5, function() 
@@ -565,7 +585,7 @@ end
 -- @return nil
 function Player:impactDamage()
     if self.fall_damage > 0 then
-        self:die(self.fall_damage)
+        self:hurt(self.fall_damage)
     end
     self.fall_damage = 0
 end
@@ -611,7 +631,17 @@ function Player:draw()
     end
 
     if self.blink then
-        love.graphics.drawq(healthbar, healthbarq[self.health + 1],
+        local arrayMax = table.getn(healthbarq)
+        -- a player can apparently be damaged by .5 (say from falling), so we need to ensure we're dealing with
+        -- integers when accessing the array
+        -- also ensure the index is in bounds. (1 to arrayMax)
+        local drawHealth = math.floor(self.health) + 1
+        if drawHealth > arrayMax then
+            drawHealth = arrayMax
+        elseif drawHealth < 1 then
+            drawHealth = 1
+        end
+        love.graphics.drawq(healthbar, healthbarq[drawHealth],
                             math.floor(self.position.x) - 18,
                             math.floor(self.position.y) - 18)
     end
@@ -817,12 +847,12 @@ end
 -- The player attacks
 -- @return nil
 function Player:attack()
-    if self.prevAttackPressed or self.dead then return end 
+    if self.prevAttackPressed or self.dead or self.isClimbing then return end 
 
     local currentWeapon = self.inventory:currentWeapon()
     local function punch()
             -- punch/kick
-        self.attack_box:activate()
+        self.attack_box:activate(self.punchDamage)
         self.prevAttackPressed = true
         self:setSpriteStates('attacking')
         Timer.add(0.1, function()
@@ -851,7 +881,7 @@ function Player:attack()
         --do nothing if we have a nonwieldable
     elseif self.doBasicAttack then
         punch()
-    elseif currentWeapon and currentWeapon.props.subtype=='melee' then
+    elseif currentWeapon and (currentWeapon.props.subtype=='melee' or currentWeapon.props.subtype == 'ranged') then
         --take out your weapon
         currentWeapon:select(self)
     elseif currentWeapon then
@@ -922,5 +952,32 @@ function Player:drop()
     end
 end
 
+-- Saves necessary player data to the gamesave object
+-- @param gamesave the gamesave object to save to
+function Player:saveData( gamesave )
+    -- Save the inventory
+    self.inventory:save( gamesave )
+    -- Save our money
+    gamesave:set( 'coins', self.money )
+    -- Save visited levels
+    gamesave:set( 'visitedLevels', json.encode( self.visitedLevels ) )
+end
+
+-- Loads necessary player data from the gamesave object
+-- @param gamesave the gamesave object to load data from
+function Player:loadSaveData( gamesave )
+    -- First, load the inventory
+    self.inventory:loadSaveData( gamesave )
+    -- Then load the money
+    local coins = gamesave:get( 'coins' )
+    if coins ~= nil then
+        self.money = coins
+    end
+    -- Then load the visited levels
+    local visited = gamesave:get( 'visitedLevels' )
+    if visited ~= nil then
+        self.visitedLevels = json.decode( visited )
+    end
+end
 
 return Player

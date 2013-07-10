@@ -10,8 +10,8 @@ return {
     damage = 3,
     bb_width = 30,
     hp = 12,
-    tokens = 5,
-    velocity = { x = 60, y = 0},
+    tokens = 6,
+    velocity = { x = 50, y = 0},
     tokenTypes = { -- p is probability ceiling and this list should be sorted by it, with the last being 1
         { item = 'coin', v = 1, p = 0.9 },
         { item = 'health', v = 1, p = 1 }
@@ -22,6 +22,10 @@ return {
             left = {'loop', {'1-4,2'}, 0.25}
         },
         default = {
+            right = {'loop', {'5-8,2'}, 0.25},
+            left = {'loop', {'1-4,2'}, 0.25}
+        },
+        hurt = {
             right = {'loop', {'5-8,2'}, 0.25},
             left = {'loop', {'1-4,2'}, 0.25}
         },

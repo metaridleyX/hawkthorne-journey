@@ -7,11 +7,11 @@ return {
     position_offset = { x = 0, y = 0 },
     height = 48,
     width = 48,
-    damage = 6,
+    damage = 4,
     bb_width = 30,
     hp = 16,
-    tokens = 5,
-    velocity = { x = 40, y = 0},
+    tokens = 7,
+    velocity = { x = 35, y = 0},
     tokenTypes = { -- p is probability ceiling and this list should be sorted by it, with the last being 1
         { item = 'coin', v = 1, p = 0.9 },
         { item = 'health', v = 1, p = 1 }
@@ -25,13 +25,17 @@ return {
             right = {'loop', {'5-8,2'}, 0.2},
             left = {'loop', {'1-4,2'}, 0.2}
         },
+        hurt = {
+            right = {'loop', {'5-8,2'}, 0.2},
+            left = {'loop', {'1-4,2'}, 0.2}
+        },
         dying = {
             right = {'loop', {'5-8,2'}, 0.2},
             left = {'loop', {'1-4,2'}, 0.2}
         },
         attack = {
-            right = {'loop', {'5-8,3'}, 0.15},
-            left = {'loop', {'1-4,3'}, 0.15}
+            right = {'loop', {'6-7,3'}, 0.15},
+            left = {'loop', {'3-4,3'}, 0.15}
         }
     },
     enter = function( enemy )

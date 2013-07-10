@@ -21,8 +21,6 @@ function Weapon.new(node, collider, plyr, weaponItem)
     weapon.name = node.name
 
     local props = require( 'nodes/weapons/' .. weapon.name )
-    weapon.isRangeWeapon = props.isRangeWeapon
-    weapon.projectile = props.projectile
 
     weapon.item = weaponItem
 
@@ -49,6 +47,8 @@ function Weapon.new(node, collider, plyr, weaponItem)
     weapon.frameHeight = weapon.sheetHeight-15
     weapon.width = props.width or 10
     weapon.height = props.height or 10
+    weapon.dropWidth = props.dropWidth
+    weapon.dropHeight = props.dropHeight
     weapon.bbox_width = props.bbox_width
     weapon.bbox_height = props.bbox_height
     weapon.bbox_offset_x = props.bbox_offset_x
@@ -165,23 +165,16 @@ end
 
 ---
 -- Called when the weapon is returned to the inventory
-function Weapon:deselect(mode)
+function Weapon:deselect()
     self.dead = true
     self.collider:remove(self.bb)
     self.containerLevel:removeNode(self)
-    local Item = require 'items/item'
-    local itemNode = require ('items/weapons/'..self.name)
-    local item = Item.new(itemNode)
-    self.player.inventory:addItem(item)
     self.player.wielding = false
     self.player.currently_held = nil
-    self.player:setSpriteStates('default')
-    
-    if mode=="sound_off" then 
-        return
-    else
-        sound.playSfx(self.unuseAudioClip)
-    end
+    local state = self.player.isClimbing and 'climbing' or self.player.previous_state_set
+    self.player:setSpriteStates(state)
+
+    sound.playSfx(self.unuseAudioClip)
 end
 
 --default update method
@@ -197,7 +190,16 @@ function Weapon:update(dt)
                             y = self.position.y + self.velocity.y*dt}
             self.velocity = {x = self.velocity.x*0.1*dt,
                             y = self.velocity.y + game.gravity*dt}
-            self.bb:moveTo(self.position.x,self.position.y)
+                            
+            local offset_x = 0
+            
+            if self.bbox_offset_x then
+                offset_x = self.bbox_offset_x[1]
+            end
+            if self.bb then
+                self.bb:moveTo(self.position.x + offset_x + self.dropWidth / 2,
+                               self.position.y + self.dropHeight / 2)
+            end
         end
 
     else
@@ -211,15 +213,18 @@ function Weapon:update(dt)
         if player.character.direction == "right" then
             self.position.x = math.floor(player.position.x) + (plyrOffset-self.hand_x) +player.offset_hand_left[1]
             self.position.y = math.floor(player.position.y) + (-self.hand_y) + player.offset_hand_left[2] 
-
-            self.bb:moveTo(self.position.x + self.bbox_offset_x[framePos] + self.bbox_width/2,
-                           self.position.y + self.bbox_offset_y[framePos] + self.bbox_height/2)
+            if self.bb then
+                self.bb:moveTo(self.position.x + self.bbox_offset_x[framePos] + self.bbox_width/2,
+                            self.position.y + self.bbox_offset_y[framePos] + self.bbox_height/2)
+            end
         else
             self.position.x = math.floor(player.position.x) + (plyrOffset+self.hand_x) +player.offset_hand_right[1]
             self.position.y = math.floor(player.position.y) + (-self.hand_y) + player.offset_hand_right[2] 
 
-            self.bb:moveTo(self.position.x - self.bbox_offset_x[framePos] - self.bbox_width/2,
-                           self.position.y + self.bbox_offset_y[framePos] + self.bbox_height/2)
+            if self.bb then
+                self.bb:moveTo(self.position.x - self.bbox_offset_x[framePos] - self.bbox_width/2,
+                               self.position.y + self.bbox_offset_y[framePos] + self.bbox_height/2)
+            end
         end
 
         if player.offset_hand_right[1] == 0 or player.offset_hand_left[1] == 0 then
@@ -227,7 +232,9 @@ function Weapon:update(dt)
         end
 
         if player.wielding and self.animation and self.animation.status == "finished" then
-            self.collider:setGhost(self.bb)
+            if self.bb then
+                self.collider:setGhost(self.bb)
+            end
             player.wielding = false
             self.animation = self.defaultAnimation
         end
@@ -246,7 +253,9 @@ function Weapon:keypressed( button, player)
         local itemNode = require ('items/weapons/'..self.name)
         local item = Item.new(itemNode)
         if player.inventory:addItem(item) then
-            self.collider:remove(self.bb)
+            if self.bb then
+                self.collider:remove(self.bb)
+            end
             self.containerLevel:removeNode(self)
             self.dead = true
             if not player.currently_held then
@@ -279,28 +288,46 @@ function Weapon:wield()
 end
 
 -- handles weapon being dropped in the real world
-function Weapon:drop()
-    self.dropping = true
+function Weapon:drop(player)
+    self.collider:remove(self.bb)
+    self.bb = self.collider:addRectangle(self.position.x,self.position.y,self.dropWidth,self.dropHeight)
+    self.bb.node = self
     self.collider:setSolid(self.bb)
-    self.velocity = {x=self.player.velocity.x,
-                     y=self.player.velocity.y,
+    if player.footprint then
+        self:floorspace_drop(player)
+        return
+    end
+    self.dropping = true
+    self.velocity = {x=player.velocity.x,
+                     y=player.velocity.y,
     }
-    self.player:setSpriteStates('default')
-    self.player.currently_held = nil
-    self.player = nil
 end
 
-function Weapon:throwProjectile()
-    local proj = Projectile.new( self.projectile, self.collider )
-    local level = GS.currentState()
-    level:addNode(proj)
+-- handle weapon being dropped in a floorspace
+function Weapon:floorspace_drop(player)
+    self.position.y = player.footprint.y - self.dropHeight
+    
+    if self.bbox_offset_x then
+        offset_x = self.bbox_offset_x[1]
+    end
+    
+    self.bb:moveTo(self.position.x + offset_x + self.dropWidth / 2, self.position.y + self.dropHeight / 2)
 end
 
 function Weapon:floor_pushback(node, new_y)
     if not self.dropping then return end
-
+    
+    local offset_x = 0
+    
     self.dropping = false
-    self.position.y = new_y
+    self.position.y = new_y + self.height - self.dropHeight --adding height cancels the height this is here until it is figured out what height is used for
+    if self.bbox_offset_x then
+        offset_x = self.bbox_offset_x[1]
+    end
+    if self.bb then
+        self.bb:moveTo(self.position.x + offset_x + self.dropWidth / 2,
+                       self.position.y + self.dropHeight / 2)
+    end
     self.velocity.y = 0
 end
 
